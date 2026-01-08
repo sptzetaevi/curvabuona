@@ -262,7 +262,7 @@
     <button class="btn tiny" id="btnZoomOut">-</button>
 
     <span class="hint">
-      Doppio click = crea • Trascina = sposta • click linea = seleziona/modifica • <kbd>CANC</kbd>/Elimina = elimina • <kbd>ESC</kbd> = annulla
+      Doppio click = crea box • Trascina = sposta • click linea = seleziona (per eliminare) • doppio click linea = modifica • <kbd>CANC</kbd>/Elimina = elimina • <kbd>ESC</kbd> = annulla collega
     </span>
 
     <!-- CONTROLLI TESTO POP SELEZIONATO -->
@@ -857,12 +857,20 @@
 
       if (l.id === selectedLinkId) elWire.classList.add("selected");
 
-      function handleSelectLink(e){
+      // --- NUOVA GESTIONE EVENTI SULLA LINEA ---
+      function handlePointerDown(e){
+        e.stopPropagation();
+        setLinkMode(false);
+        selectLink(l.id);
+        setStatus("Collegamento selezionato.");
+      }
+
+      function handleDblClick(e){
         e.stopPropagation();
         setLinkMode(false);
         selectLink(l.id);
 
-        // apri popup per modificare questo collegamento
+        // preset iniziale dal collegamento esistente
         linkPreset = {
           end: l.end || "arrow",
           shape: l.shape || "straight",
@@ -881,9 +889,9 @@
           setStatus("Collegamento aggiornato.");
         });
       }
-      elWire.addEventListener("pointerdown", handleSelectLink);
-      elWire.addEventListener("mousedown", handleSelectLink);
-      elWire.addEventListener("click", handleSelectLink);
+
+      elWire.addEventListener("pointerdown", handlePointerDown);
+      elWire.addEventListener("dblclick", handleDblClick);
 
       svg.appendChild(elWire);
     });
