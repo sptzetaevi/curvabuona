@@ -262,7 +262,7 @@
     <button class="btn tiny" id="btnZoomOut">-</button>
 
     <span class="hint">
-      Doppio click = crea • Trascina = sposta • click linea = seleziona • <kbd>CANC</kbd>/Elimina = elimina • <kbd>ESC</kbd> = annulla
+      Doppio click = crea • Trascina = sposta • click linea = seleziona/modifica • <kbd>CANC</kbd>/Elimina = elimina • <kbd>ESC</kbd> = annulla
     </span>
 
     <!-- CONTROLLI TESTO POP SELEZIONATO -->
@@ -306,7 +306,7 @@
   var btnLink = document.getElementById("btnLink");
   var btnDelete = document.getElementById("btnDelete");
   var btnPdf = document.getElementById("btnPdf");
-  var btnExportJson = document.getElementElementById ? document.getElementById("btnExportJson") : document.getElementById("btnExportJson");
+  var btnExportJson = document.getElementById("btnExportJson");
   var btnExportHtml = document.getElementById("btnExportHtml");
   var btnImport = document.getElementById("btnImport");
   var btnMove = document.getElementById("btnMove");
@@ -487,7 +487,7 @@
           '<label><input type="radio" name="linkShape" value="straight"> Retta</label>' +
           '<label><input type="radio" name="linkShape" value="curve"> Curva</label>' +
         '</div>' +
-        '<div class="row">' +
+        '<div class="row" data-curve-row>' +
           '<label><input type="radio" name="curveDir" value="down"> Curva verso il basso</label>' +
           '<label><input type="radio" name="curveDir" value="up"> Curva verso l\'alto</label>' +
         '</div>' +
@@ -498,11 +498,39 @@
       '</div>';
 
     document.body.appendChild(linkModal);
+
+    // logica: abilita/disabilita le curve solo se "shape = curve"
+    var shapeRadios = linkModal.querySelectorAll('input[name="linkShape"]');
+    var curveRadios = linkModal.querySelectorAll('input[name="curveDir"]');
+    var curveLabels = [];
+    curveRadios.forEach(function(r){
+      if (r.parentElement) curveLabels.push(r.parentElement);
+    });
+
+    function updateCurveRadiosDisabled() {
+      var shapeVal = (linkModal.querySelector('input[name="linkShape"]:checked') || {}).value;
+      var disabled = shapeVal !== 'curve';
+
+      curveRadios.forEach(function(r){
+        r.disabled = disabled;
+      });
+      curveLabels.forEach(function(lbl){
+        lbl.style.opacity = disabled ? 0.5 : 1;
+      });
+    }
+
+    shapeRadios.forEach(function(r){
+      r.addEventListener('change', updateCurveRadiosDisabled);
+    });
+
+    // salvo per usarla in openLinkOptions
+    linkModal._updateCurveRadiosDisabled = updateCurveRadiosDisabled;
   }
 
   function openLinkOptions(done) {
     ensureLinkModal();
 
+    // preseleziona i valori correnti (da linkPreset)
     var endRadio = linkModal.querySelector('input[name="linkEnd"][value="' + linkPreset.end + '"]');
     var shapeRadio = linkModal.querySelector('input[name="linkShape"][value="' + linkPreset.shape + '"]');
     if (endRadio) endRadio.checked = true;
@@ -511,6 +539,11 @@
     var curveRadioVal = (linkPreset.curveDir === -1) ? "up" : "down";
     var curveRadio = linkModal.querySelector('input[name="curveDir"][value="' + curveRadioVal + '"]');
     if (curveRadio) curveRadio.checked = true;
+
+    // aggiorna subito lo stato curve (se "retta", disabilita)
+    if (typeof linkModal._updateCurveRadiosDisabled === "function") {
+      linkModal._updateCurveRadiosDisabled();
+    }
 
     linkModal.style.display = "flex";
 
@@ -527,8 +560,13 @@
     okBtn.onclick = function () {
       var endVal = (linkModal.querySelector('input[name="linkEnd"]:checked') || {}).value || "arrow";
       var shapeVal = (linkModal.querySelector('input[name="linkShape"]:checked') || {}).value || "straight";
-      var curveVal = (linkModal.querySelector('input[name="curveDir"]:checked') || {}).value || "down";
-      var curveDir = (curveVal === "up") ? -1 : 1;
+
+      // se la shape è curva, leggo anche la direzione
+      var curveDir = linkPreset.curveDir || 1;
+      if (shapeVal === "curve") {
+        var curveVal = (linkModal.querySelector('input[name="curveDir"]:checked') || {}).value || "down";
+        curveDir = (curveVal === "up") ? -1 : 1;
+      }
 
       linkPreset = { end: endVal, shape: shapeVal, curveDir: curveDir };
       close();
@@ -633,6 +671,9 @@
     if (on) {
       if (moveMode) setMoveMode(false);
       if (!selectedBoxId) { setStatus("Seleziona un box prima di collegare."); return; }
+
+      // preset di base quando entro in modalità collega
+      linkPreset = linkPreset || { end:"arrow", shape:"straight", curveDir:1 };
 
       openLinkOptions(function (ok) {
         if (!ok) { setStatus("Collegamento annullato."); return; }
@@ -820,7 +861,25 @@
         e.stopPropagation();
         setLinkMode(false);
         selectLink(l.id);
-        setStatus("Link selezionato.");
+
+        // apri popup per modificare questo collegamento
+        linkPreset = {
+          end: l.end || "arrow",
+          shape: l.shape || "straight",
+          curveDir: (typeof l.curveDir === "number") ? l.curveDir : 1
+        };
+
+        openLinkOptions(function(ok){
+          if (!ok) {
+            setStatus("Modifica collegamento annullata.");
+            return;
+          }
+          l.end = linkPreset.end;
+          l.shape = linkPreset.shape;
+          l.curveDir = linkPreset.curveDir;
+          renderLinks();
+          setStatus("Collegamento aggiornato.");
+        });
       }
       elWire.addEventListener("pointerdown", handleSelectLink);
       elWire.addEventListener("mousedown", handleSelectLink);
